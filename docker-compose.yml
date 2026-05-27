@@ -1,0 +1,62 @@
+services:
+  db:
+    image: postgres:${POSTGRES_VERSION:-16}
+    container_name: school_api_db
+    environment:
+      POSTGRES_USER: ${DATABASE_USER:-postgres}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-postgres}
+      POSTGRES_DB: ${DATABASE_NAME:-school_api_development}
+    ports:
+      - "${DATABASE_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: school_api_app
+    command: bash -c "bundle exec rails db:migrate db:seed && bundle exec rails server -b 0.0.0.0 -p 3000"
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      RAILS_ENV: development
+      DATABASE_HOST: ${DATABASE_HOST:-db}
+      DATABASE_USER: ${DATABASE_USER:-postgres}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-postgres}
+      DATABASE_NAME: ${DATABASE_NAME:-school_api_development}
+      DATABASE_PORT: 5432
+      SECRET_SALT: ${SECRET_SALT:-secret_salt}
+    volumes:
+      - .:/rails
+      - bundle_data:/usr/local/bundle
+
+  test:
+    build: .
+    command: bash -c "bundle exec rails db:drop db:create db:migrate && bundle exec rspec"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      RAILS_ENV: test
+      DATABASE_HOST: ${DATABASE_HOST:-db}
+      DATABASE_USER: ${DATABASE_USER:-postgres}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-postgres}
+      TEST_DATABASE_NAME: ${TEST_DATABASE_NAME:-school_api_test}
+      DATABASE_PORT: 5432
+      SECRET_SALT: ${SECRET_SALT:-secret_salt}
+    volumes:
+      - .:/rails
+      - bundle_data:/usr/local/bundle
+    profiles:
+      - test
+
+volumes:
+  postgres_data:
+  bundle_data:
